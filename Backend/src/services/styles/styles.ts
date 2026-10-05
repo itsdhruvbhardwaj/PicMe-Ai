@@ -3,7 +3,8 @@ export interface Style {
   name: string;
   description: string;
   prompt: string;
-  thumbnail: String | null;
+  thumbnail: string | null;
+  imageCount: 1 | 2;
 }
 
 export const styles: Style[] = [
@@ -12,42 +13,48 @@ export const styles: Style[] = [
     name: "Cinematic Couple",
     description: "Create a cinematic couple portrait",
     prompt: "Create a cinematic, emotionally warm couple portrait with refined lighting and a natural composition.",
-    thumbnail: "https://res.cloudinary.com/xjqlkkta/image/upload/v1791219836/download.jpg"
+    thumbnail: "https://res.cloudinary.com/xjqlkkta/image/upload/v1791225261/Golden-Hour_Riverfront_Embrace.png",
+    imageCount: 2
   },
   {
     id: "90s-bollywood",
     name: "90s Bollywood",
     description: "A colorful, nostalgic 1990s Bollywood-inspired portrait",
     prompt: "Apply a colorful, nostalgic 1990s Bollywood film aesthetic with expressive cinematic lighting and period-inspired color grading.",
-    thumbnail: null,
+    thumbnail: "https://res.cloudinary.com/xjqlkkta/image/upload/v1791225254/90s_Bollywood_Mountain_Romance.png",
+    imageCount: 1,
   },
   {
     id: "vintage-film",
     name: "Vintage Film",
     description: "A timeless analog film portrait",
     prompt: "Create a timeless analog film portrait with subtle grain, gentle contrast, natural skin tones, and restrained vintage color.",
-    thumbnail: null,
+    thumbnail: "https://res.cloudinary.com/xjqlkkta/image/upload/v1791225274/Nostalgic_Golden-Hour_Romance.png",
+    imageCount: 1,
   },
   {
     id: "anime-portrait",
     name: "Anime Portrait",
     description: "A polished anime-inspired portrait",
     prompt: "Render the portrait in a polished anime-inspired illustration style while preserving the subject's recognizable facial characteristics.",
-    thumbnail: null,
+    thumbnail: "https://res.cloudinary.com/xjqlkkta/image/upload/v1791225270/Sunset_Selfie_for_Two.png",
+    imageCount: 1,
   },
   {
     id: "wedding",
     name: "Wedding",
     description: "An elegant, romantic wedding portrait",
     prompt: "Create an elegant, romantic wedding portrait with graceful composition, soft natural light, and refined editorial styling.",
-    thumbnail: null,
+    thumbnail: "https://res.cloudinary.com/xjqlkkta/image/upload/v1791225259/Golden_Indian_Wedding_Embrace.png",
+    imageCount: 1,
   },
   {
     id: "professional-portrait",
     name: "Professional Portrait",
     description: "A polished professional headshot",
     prompt: "Create a polished professional portrait with flattering studio-quality light, a clean background, and natural, credible styling.",
-    thumbnail: null,
+    thumbnail: "https://res.cloudinary.com/xjqlkkta/image/upload/v1791225246/Warm_Professional_Office_Portrait.png",
+    imageCount: 1,
   },
 ];
 

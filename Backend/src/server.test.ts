@@ -36,7 +36,30 @@ describe("styles endpoint", () => {
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body.styles)).toBe(true);
     expect(response.body.styles.length).toBeGreaterThan(0);
-    expect(response.body.styles[0]).toHaveProperty("id");
+    for (const style of response.body.styles) {
+      expect(style).toHaveProperty("id");
+      expect(style).toHaveProperty("name");
+      expect(style).toHaveProperty("description");
+      expect(style).toHaveProperty("prompt");
+      expect(style).toHaveProperty("thumbnail");
+      expect([1, 2]).toContain(style.imageCount);
+    }
+  });
+});
+
+describe("generation endpoint", () => {
+  it("continues to accept styleId and images", async () => {
+    const response = await request(app)
+      .post("/api/generate")
+      .field("styleId", "professional-portrait")
+      .attach("images", Buffer.from("fake-image-data"), {
+        filename: "portrait.png",
+        contentType: "image/png",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ ok: true });
+    expect(response.body.image).toMatch(/^data:image\/.+;base64,abc123$/);
   });
 });
 
