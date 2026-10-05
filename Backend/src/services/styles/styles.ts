@@ -12,7 +12,7 @@ export const styles: Style[] = [
     name: "Cinematic Couple",
     description: "Create a cinematic couple portrait",
     prompt: "Create a cinematic, emotionally warm couple portrait with refined lighting and a natural composition.",
-    thumbnail: null,
+    thumbnail: "https://res.cloudinary.com/xjqlkkta/image/upload/v1791219836/download.jpg"
   },
   {
     id: "90s-bollywood",
