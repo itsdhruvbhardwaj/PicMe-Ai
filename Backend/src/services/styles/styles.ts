@@ -3,7 +3,7 @@ export interface Style {
   name: string;
   description: string;
   prompt: string;
-  thumbnail: null;
+  thumbnail: String | null;
 }
 
 export const styles: Style[] = [
