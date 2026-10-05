@@ -1,0 +1,22 @@
+# Android
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+.externalNativeBuild/
+.cxx/
+
+# Backend
+Backend/node_modules/
+Backend/dist/
+Backend/.env
+Backend/.env.*
+!Backend/.env.example
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
