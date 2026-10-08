@@ -1,0 +1,35 @@
+package com.itsdhruvbhardwaj.picme.ui.auth
+
+import com.itsdhruvbhardwaj.picme.data.model.User
+
+/**
+ * Represents the various states of the PicMe authentication flow.
+ */
+sealed interface AuthState {
+    /**
+     * The app is currently checking for an existing session (restoring).
+     */
+    data object CheckingSession : AuthState
+
+    /**
+     * The user is not logged in.
+     */
+    data object Unauthenticated : AuthState
+
+    /**
+     * An authentication operation (login/Google) is currently in progress.
+     */
+    data object Authenticating : AuthState
+
+    /**
+     * The user has been successfully authenticated.
+     * @property user The profile data of the logged-in user.
+     */
+    data class Authenticated(val user: User) : AuthState
+
+    /**
+     * An authentication operation failed.
+     * @property message A human-readable description of the failure.
+     */
+    data class Error(val message: String) : AuthState
+}
