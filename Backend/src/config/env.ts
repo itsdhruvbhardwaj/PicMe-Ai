@@ -14,6 +14,42 @@ export const env = {
   get openAiApiKey() {
     return process.env.OPENAI_API_KEY ?? "";
   },
+  get mongodbUri() {
+    return (process.env.MONGODB_URI ?? "").trim();
+  },
+  get jwtAccessSecret() {
+    return process.env.JWT_ACCESS_SECRET ?? "";
+  },
+  get jwtRefreshSecret() {
+    return process.env.JWT_REFRESH_SECRET ?? "";
+  },
+  get jwtAccessExpiresIn() {
+    return process.env.JWT_ACCESS_EXPIRES_IN ?? "15m";
+  },
+  get jwtRefreshExpiresIn() {
+    return process.env.JWT_REFRESH_EXPIRES_IN ?? "30d";
+  },
+  get googleClientId() {
+    return (process.env.GOOGLE_CLIENT_ID ?? "").trim();
+  },
+  get smtpHost() {
+    return process.env.SMTP_HOST ?? "";
+  },
+  get smtpPort() {
+    return positiveInteger("SMTP_PORT", 587);
+  },
+  get smtpUser() {
+    return process.env.SMTP_USER ?? "";
+  },
+  get smtpPassword() {
+    return process.env.SMTP_PASSWORD ?? "";
+  },
+  get emailFrom() {
+    return process.env.EMAIL_FROM ?? "";
+  },
+  get appBaseUrl() {
+    return process.env.APP_BASE_URL ?? "http://localhost:5000";
+  },
   get port() {
     return positiveInteger("PORT", 5000);
   },
