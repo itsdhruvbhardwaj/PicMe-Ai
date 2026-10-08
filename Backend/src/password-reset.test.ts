@@ -3,14 +3,13 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const emailMocks = vi.hoisted(() => ({
-  createTransport: vi.fn(),
-  sendMail: vi.fn(),
+  send: vi.fn(),
 }));
 
-vi.mock("nodemailer", () => ({
-  default: {
-    createTransport: emailMocks.createTransport,
-  },
+vi.mock("resend", () => ({
+  Resend: vi.fn().mockImplementation(() => ({
+    emails: { send: emailMocks.send },
+  })),
 }));
 
 vi.mock("./models/User.js", () => ({
@@ -55,10 +54,7 @@ vi.setConfig({ testTimeout: 30_000 });
 process.env.JWT_ACCESS_SECRET = "test-access-secret";
 process.env.JWT_REFRESH_SECRET = "test-refresh-secret";
 process.env.APP_BASE_URL = "http://localhost:5000";
-process.env.SMTP_HOST = "localhost";
-process.env.SMTP_PORT = "587";
-process.env.SMTP_USER = "noreply@example.com";
-process.env.SMTP_PASSWORD = "test-smtp-password";
+process.env.RESEND_API_KEY = "test-resend-api-key";
 process.env.EMAIL_FROM = "noreply@example.com";
 
 const app = express();
@@ -107,8 +103,7 @@ function activeUser(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   nextClientIp += 1;
-  emailMocks.createTransport.mockReturnValue({ sendMail: emailMocks.sendMail });
-  emailMocks.sendMail.mockResolvedValue({});
+  emailMocks.send.mockResolvedValue({ data: { id: "email-reset" }, error: null });
   userModel.updateOne.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
   resetTokenModel.create.mockResolvedValue({ _id: "reset-token-1" });
   resetTokenModel.updateMany.mockResolvedValue({ modifiedCount: 0 });
@@ -138,7 +133,7 @@ describe("forgot password", () => {
     await vi.waitFor(() => {
       expect(userModel.findOne).toHaveBeenCalledWith({ email: "user@example.com" });
       expect(resetTokenModel.create).toHaveBeenCalledTimes(1);
-      expect(emailMocks.sendMail).toHaveBeenCalledTimes(1);
+      expect(emailMocks.send).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -150,10 +145,10 @@ describe("forgot password", () => {
     });
 
     expect(response.status).toBe(200);
-    await vi.waitFor(() => expect(emailMocks.sendMail).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(emailMocks.send).toHaveBeenCalledTimes(1));
 
     const storedToken = resetTokenModel.create.mock.calls[0][0];
-    const mail = emailMocks.sendMail.mock.calls[0][0];
+    const mail = emailMocks.send.mock.calls[0][0];
     const resetUrl = mail.text.match(/http:\/\/localhost:5000\/api\/auth\/reset-password\?token=[^\s]+/)?.[0];
 
     expect(storedToken.tokenHash).toMatch(/^[a-f0-9]{64}$/);
@@ -167,6 +162,8 @@ describe("forgot password", () => {
     expect(storedToken).not.toHaveProperty("rawToken");
     expect(mail.to).toBe("user@example.com");
     expect(mail.text).toContain("http://localhost:5000/api/auth/reset-password?token=");
+    expect(mail.from).toBe("noreply@example.com");
+    expect(mail.subject).toBe("Reset your password");
   });
 
   it("does not send reset email to disabled accounts", async () => {
@@ -176,7 +173,7 @@ describe("forgot password", () => {
     await vi.waitFor(() => expect(userModel.findOne).toHaveBeenCalledTimes(1));
 
     expect(resetTokenModel.create).not.toHaveBeenCalled();
-    expect(emailMocks.sendMail).not.toHaveBeenCalled();
+    expect(emailMocks.send).not.toHaveBeenCalled();
   });
 
   it("rate limits forgot-password requests by client IP", async () => {

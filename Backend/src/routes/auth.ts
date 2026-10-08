@@ -9,7 +9,7 @@ import { EmailVerificationToken } from "../models/EmailVerificationToken.js";
 import { PasswordResetToken } from "../models/PasswordResetToken.js";
 import { Session } from "../models/Session.js";
 import { User } from "../models/User.js";
-import { sendPasswordResetEmail, sendVerificationEmail } from "../services/email/verification.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../services/emailService.js";
 
 const router: Router = Router();
 const googleOAuthClient = new OAuth2Client();

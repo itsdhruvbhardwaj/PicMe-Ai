@@ -6,10 +6,7 @@ process.env.JWT_ACCESS_SECRET = "test-access-secret";
 process.env.JWT_REFRESH_SECRET = "test-refresh-secret";
 process.env.APP_BASE_URL = "http://localhost:5000";
 process.env.GOOGLE_CLIENT_ID = "test-google-client-id";
-process.env.SMTP_HOST = "localhost";
-process.env.SMTP_PORT = "587";
-process.env.SMTP_USER = "noreply@example.com";
-process.env.SMTP_PASSWORD = "secret";
+process.env.RESEND_API_KEY = "test-resend-api-key";
 process.env.EMAIL_FROM = "noreply@example.com";
 
 vi.mock("express-rate-limit", () => ({
@@ -18,6 +15,7 @@ vi.mock("express-rate-limit", () => ({
 
 const googleAuthMocks = vi.hoisted(() => ({
   verifyIdToken: vi.fn(),
+  sendEmail: vi.fn(),
 }));
 
 vi.mock("google-auth-library", () => ({
@@ -53,8 +51,10 @@ vi.mock("./models/EmailVerificationToken.js", () => ({
   },
 }));
 
-vi.mock("./services/email/verification.js", () => ({
-  sendVerificationEmail: vi.fn().mockResolvedValue(true),
+vi.mock("resend", () => ({
+  Resend: vi.fn().mockImplementation(() => ({
+    emails: { send: googleAuthMocks.sendEmail },
+  })),
 }));
 
 import { app } from "./server.js";
@@ -69,6 +69,7 @@ const tokenModel = EmailVerificationToken as any;
 describe("auth registration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    googleAuthMocks.sendEmail.mockResolvedValue({ data: { id: "email-123" }, error: null });
   });
 
   it("registers a new user successfully", async () => {
@@ -92,6 +93,12 @@ describe("auth registration", () => {
     expect(response.body.user.email).toBe("john@example.com");
     expect(response.body.user.passwordHash).toBeUndefined();
     expect(userModel.create).toHaveBeenCalledTimes(1);
+    expect(googleAuthMocks.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      from: "noreply@example.com",
+      to: "john@example.com",
+      subject: "Verify your email address",
+      text: expect.stringContaining("http://localhost:5000/api/auth/verify-email?token="),
+    }));
   });
 
   it("rejects duplicate email registrations", async () => {
@@ -127,6 +134,7 @@ describe("auth registration", () => {
 describe("email verification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    googleAuthMocks.sendEmail.mockResolvedValue({ data: { id: "email-123" }, error: null });
   });
 
   it("verifies a valid token and marks the user as verified", async () => {
@@ -171,6 +179,35 @@ describe("email verification", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatch(/invalid or expired/i);
+  });
+
+  it("resends verification email through Resend", async () => {
+    userModel.findOne.mockResolvedValue({
+      _id: "user-resend",
+      name: "Resend User",
+      email: "resend@example.com",
+      emailVerified: false,
+    });
+    tokenModel.findOne.mockReturnValue({
+      sort: () => ({ lean: async () => null }),
+    });
+    tokenModel.create.mockResolvedValue({ _id: "token-resend" });
+
+    const response = await request(app)
+      .post("/api/auth/resend-verification")
+      .send({ email: "resend@example.com" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      ok: true,
+      message: "If the account exists and needs verification, a new email has been sent.",
+    });
+    expect(googleAuthMocks.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      from: "noreply@example.com",
+      to: "resend@example.com",
+      subject: "Verify your email address",
+      text: expect.stringContaining("http://localhost:5000/api/auth/verify-email?token="),
+    }));
   });
 
   it("verifies a valid token from a browser link", async () => {

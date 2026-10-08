@@ -32,17 +32,8 @@ export const env = {
   get googleClientId() {
     return (process.env.GOOGLE_CLIENT_ID ?? "").trim();
   },
-  get smtpHost() {
-    return process.env.SMTP_HOST ?? "";
-  },
-  get smtpPort() {
-    return positiveInteger("SMTP_PORT", 587);
-  },
-  get smtpUser() {
-    return process.env.SMTP_USER ?? "";
-  },
-  get smtpPassword() {
-    return process.env.SMTP_PASSWORD ?? "";
+  get resendApiKey() {
+    return process.env.RESEND_API_KEY ?? "";
   },
   get emailFrom() {
     return process.env.EMAIL_FROM ?? "";

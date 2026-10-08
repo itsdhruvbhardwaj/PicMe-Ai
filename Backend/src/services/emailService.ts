@@ -1,21 +1,37 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-import { env } from "../../config/env.js";
+import { env } from "../config/env.js";
 
-function hasSmtpConfig(): boolean {
-  return Boolean(env.smtpHost && env.smtpUser && env.smtpPassword && env.emailFrom);
-}
+type EmailMessage = {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+};
 
-function createEmailTransporter() {
-  return nodemailer.createTransport({
-    host: env.smtpHost,
-    port: env.smtpPort,
-    secure: env.smtpPort === 465,
-    auth: {
-      user: env.smtpUser,
-      pass: env.smtpPassword,
-    },
-  });
+async function sendEmail(message: EmailMessage, purpose: string): Promise<boolean> {
+  if (!env.resendApiKey || !env.emailFrom) {
+    console.warn(`Resend email ${purpose} is not configured; email was not sent.`);
+    return false;
+  }
+
+  try {
+    const resend = new Resend(env.resendApiKey);
+    const { error } = await resend.emails.send({
+      from: env.emailFrom,
+      ...message,
+    });
+
+    if (error) {
+      console.error(`Failed to send ${purpose} email via Resend.`);
+      return false;
+    }
+
+    return true;
+  } catch {
+    console.error(`Failed to send ${purpose} email via Resend.`);
+    return false;
+  }
 }
 
 export async function sendVerificationEmail(input: {
@@ -24,17 +40,10 @@ export async function sendVerificationEmail(input: {
   rawToken: string;
 }): Promise<boolean> {
   const { email, name, rawToken } = input;
-
-  if (!hasSmtpConfig()) {
-    console.warn("SMTP email verification is not configured; verification email was not sent.");
-    return false;
-  }
-
   const verificationUrl = `${env.appBaseUrl.replace(/\/$/, "")}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}`;
 
-  try {
-    await createEmailTransporter().sendMail({
-      from: env.emailFrom,
+  return sendEmail(
+    {
       to: email,
       subject: "Verify your email address",
       html: `
@@ -44,14 +53,9 @@ export async function sendVerificationEmail(input: {
         <p>If you did not create this account, you can ignore this email.</p>
       `,
       text: `Hello ${name},\n\nPlease verify your email address using this link:\n${verificationUrl}\n\nIf you did not create this account, you can ignore this email.`,
-    });
-
-    return true;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown SMTP error";
-    console.error("Failed to send verification email:", message);
-    return false;
-  }
+    },
+    "verification",
+  );
 }
 
 export async function sendPasswordResetEmail(input: {
@@ -59,17 +63,10 @@ export async function sendPasswordResetEmail(input: {
   rawToken: string;
 }): Promise<boolean> {
   const { email, rawToken } = input;
-
-  if (!hasSmtpConfig()) {
-    console.warn("SMTP password reset is not configured; password reset email was not sent.");
-    return false;
-  }
-
   const resetUrl = `${env.appBaseUrl.replace(/\/$/, "")}/api/auth/reset-password?token=${encodeURIComponent(rawToken)}`;
 
-  try {
-    await createEmailTransporter().sendMail({
-      from: env.emailFrom,
+  return sendEmail(
+    {
       to: email,
       subject: "Reset your password",
       html: `
@@ -79,12 +76,7 @@ export async function sendPasswordResetEmail(input: {
         <p>This link expires in 30 minutes.</p>
       `,
       text: `We received a request to reset your password.\n\nReset your password using this link:\n${resetUrl}\n\nIf you did not request this, you can ignore this email. This link expires in 30 minutes.`,
-    });
-
-    return true;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown SMTP error";
-    console.error("Failed to send password reset email:", message);
-    return false;
-  }
+    },
+    "password reset",
+  );
 }
