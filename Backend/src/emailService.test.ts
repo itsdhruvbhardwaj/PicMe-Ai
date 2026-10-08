@@ -20,21 +20,17 @@ beforeEach(() => {
   process.env.RESEND_API_KEY = resendApiKey;
   process.env.EMAIL_FROM = "onboarding@resend.dev";
   process.env.APP_BASE_URL = "https://picme.example";
-  vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
-describe("Resend email diagnostics", () => {
-  it("logs returned Resend error fields without exposing credentials or tokens", async () => {
+describe("Resend email delivery", () => {
+  it("returns failure and logs a generic message for returned Resend errors", async () => {
     resendMocks.send.mockResolvedValue({
       data: null,
       error: {
         name: "invalid_from_address",
-        message:
-          `Sender rejected for token ${verificationToken} using ${resendApiKey}; ` +
-          "Authorization: Bearer access-secret access_token=access-secret " +
-          "refresh_token=refresh-secret password=password-secret",
+        message: "Sender rejected",
         statusCode: 403,
       },
     });
@@ -46,29 +42,16 @@ describe("Resend email diagnostics", () => {
     });
 
     expect(sent).toBe(false);
-    expect(console.info).toHaveBeenCalledWith(
-      "Resend email configuration: RESEND_API_KEY configured: true; EMAIL_FROM configured: true; sender: onboarding@resend.dev",
-    );
-    expect(console.error).toHaveBeenCalledWith(
-      "Failed to send verification email via Resend.",
-      expect.objectContaining({
-        errorName: "invalid_from_address",
-        errorMessage: expect.stringContaining("[REDACTED]"),
-        httpStatus: 403,
-        resendCode: "invalid_from_address",
-        dataPresent: false,
-      }),
-    );
+    expect(console.error).toHaveBeenCalledExactlyOnceWith("Failed to send verification email via Resend.");
 
     const loggedOutput = JSON.stringify(vi.mocked(console.error).mock.calls);
     expect(loggedOutput).not.toContain(resendApiKey);
     expect(loggedOutput).not.toContain(verificationToken);
-    expect(loggedOutput).not.toContain("access-secret");
-    expect(loggedOutput).not.toContain("refresh-secret");
-    expect(loggedOutput).not.toContain("password-secret");
+    expect(loggedOutput).not.toContain("Sender rejected");
+    expect(loggedOutput).not.toContain("Authorization");
   });
 
-  it("reports a missing data response as a failure", async () => {
+  it("returns failure if a response has no data or error", async () => {
     resendMocks.send.mockResolvedValue({ data: null, error: null });
 
     const sent = await sendVerificationEmail({
@@ -78,13 +61,10 @@ describe("Resend email diagnostics", () => {
     });
 
     expect(sent).toBe(false);
-    expect(console.error).toHaveBeenCalledWith(
-      "Failed to send verification email via Resend.",
-      expect.objectContaining({ dataPresent: false }),
-    );
+    expect(console.error).toHaveBeenCalledExactlyOnceWith("Failed to send verification email via Resend.");
   });
 
-  it("logs safe fields from thrown exceptions", async () => {
+  it("returns failure and logs a generic message for thrown exceptions", async () => {
     const error = Object.assign(
       new Error(`Request failed for ${verificationToken} with ${resendApiKey}`),
       { statusCode: 502, code: "upstream_error" },
@@ -98,18 +78,11 @@ describe("Resend email diagnostics", () => {
     });
 
     expect(sent).toBe(false);
-    expect(console.error).toHaveBeenCalledWith(
-      "Failed to send verification email via Resend.",
-      expect.objectContaining({
-        errorName: "Error",
-        httpStatus: 502,
-        resendCode: "upstream_error",
-        dataPresent: false,
-      }),
-    );
+    expect(console.error).toHaveBeenCalledExactlyOnceWith("Failed to send verification email via Resend.");
 
     const loggedOutput = JSON.stringify(vi.mocked(console.error).mock.calls);
     expect(loggedOutput).not.toContain(resendApiKey);
     expect(loggedOutput).not.toContain(verificationToken);
+    expect(loggedOutput).not.toContain(error.message);
   });
 });
