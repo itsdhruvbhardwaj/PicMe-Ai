@@ -22,6 +22,10 @@ vi.mock("openai", () => {
 });
 
 describe("backend health", () => {
+  it("trusts one proxy hop for client IP resolution", () => {
+    expect(app.get("trust proxy")).toBe(1);
+  });
+
   it("reports application health", async () => {
     const response = await request(app).get("/health");
 
