@@ -43,6 +43,21 @@ app.use(
   }),
 );
 
+app.get("/.well-known/assetlinks.json", (_req: Request, res: Response) => {
+  res.json([
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: "com.itsdhruvbhardwaj.picme",
+        sha256_cert_fingerprints: [
+          "B9:EA:A3:05:97:C5:CF:64:FE:D7:A0:4D:DE:5B:E9:31:F7:E2:C0:E4:2B:AF:A5:9F:A1:DE:F0:4B:C3:A3:B4:8C",
+        ],
+      },
+    },
+  ]);
+});
+
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, service: "ai-photo-studio-backend" });
 });
