@@ -82,11 +82,11 @@ class AuthViewModel(
             val result = authRepository.register(name, email, password)
             result.fold(
                 onSuccess = {
-                    // After registration, the backend returns the user but they are not verified.
+                    // After registration, the user needs to verify their email.
                     _authState.value = AuthState.VerifyEmailRequired(email)
                 },
                 onFailure = { error ->
-                    _authState.value = AuthState.Error(error.message ?: "Registration failed")
+                    _authState.value = AuthState.Error(mapError(error.message))
                 }
             )
         }
@@ -100,11 +100,17 @@ class AuthViewModel(
             _authState.value = AuthState.Authenticating
             val result = authRepository.verifyEmail(token)
             result.fold(
-                onSuccess = { message ->
-                    _authState.value = AuthState.VerificationSuccess(message ?: "Email verified successfully")
+                onSuccess = { user ->
+                    // Successful verification now starts an authenticated session
+                    _authState.value = AuthState.Authenticated(user)
                 },
                 onFailure = { error ->
-                    _authState.value = AuthState.Error(error.message ?: "Verification failed")
+                    val errorMessage = error.message ?: ""
+                    if (errorMessage == "verification_success_no_tokens") {
+                        _authState.value = AuthState.VerificationSuccess("Email verified successfully. Please sign in to continue.")
+                    } else {
+                        _authState.value = AuthState.Error(mapError(errorMessage))
+                    }
                 }
             )
         }
@@ -118,17 +124,11 @@ class AuthViewModel(
             _authState.value = AuthState.Authenticating
             val result = authRepository.resendVerification(email)
             result.fold(
-                onSuccess = { message ->
-                    // We stay in VerifyEmailRequired state so user can still enter the token.
-                    // VerificationSuccess is reserved for when the actual token is accepted.
-                    // We might need a separate way to show success for resend, 
-                    // but following existing architecture, we can revert to VerifyEmailRequired 
-                    // or just report success through a toast/event if we had one.
-                    // For now, we revert to VerifyEmailRequired to clear the loading state.
+                onSuccess = {
                     _authState.value = AuthState.VerifyEmailRequired(email)
                 },
                 onFailure = { error ->
-                    _authState.value = AuthState.Error(error.message ?: "Failed to resend verification")
+                    _authState.value = AuthState.Error(mapError(error.message))
                 }
             )
         }
@@ -171,14 +171,25 @@ class AuthViewModel(
                 _authState.value = AuthState.Authenticated(user)
             },
             onFailure = { error ->
-                _authState.value = AuthState.Error(error.message ?: "Authentication failed")
+                _authState.value = AuthState.Error(mapError(error.message))
             }
         )
     }
 
+    private fun mapError(message: String?): String {
+        return when (message) {
+            "invalid_credentials" -> "Incorrect email or password. Please try again."
+            "unverified_account" -> "Your account has been created, but your email hasn't been verified yet. Check your inbox and Spam/Junk folder."
+            "email_already_exists" -> "An account with this email already exists. Try logging in instead."
+            "invalid_token", "expired_token", "token_already_used" -> "This verification link is invalid or has expired. Request a new one."
+            "network_failure" -> "Unable to connect. Check your internet connection and try again."
+            "server_failure" -> "PicMe is temporarily unavailable. Please try again shortly."
+            else -> message ?: "An unexpected error occurred. Please try again."
+        }
+    }
+
     /**
      * Resets the auth state to unauthenticated.
-     * Useful for clearing errors or navigating back to login from verification success.
      */
     fun resetAuthState() {
         _authState.value = AuthState.Unauthenticated

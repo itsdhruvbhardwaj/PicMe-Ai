@@ -17,7 +17,7 @@ interface AuthApiService {
     @POST("api/auth/verify-email")
     suspend fun verifyEmail(
         @Body request: VerifyEmailRequest
-    ): Response<MessageResponse>
+    ): Response<AuthResponse>
 
     @POST("api/auth/resend-verification")
     suspend fun resendVerification(

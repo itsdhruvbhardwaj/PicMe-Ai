@@ -27,7 +27,7 @@ class AuthRepository(
                     tokenStorage.saveTokens(accessToken, refreshToken)
                     Result.success(user)
                 } else {
-                    Result.failure(Exception("Incomplete response from server"))
+                    Result.failure(Exception("server_failure"))
                 }
             }
         )
@@ -47,11 +47,20 @@ class AuthRepository(
         )
     }
 
-    suspend fun verifyEmail(token: String): Result<String> {
+    suspend fun verifyEmail(token: String): Result<User> {
         return safeApiCall(
             call = { apiService.verifyEmail(VerifyEmailRequest(token)) },
             onSuccess = { response ->
-                Result.success(response.message)
+                val user = response.user
+                val accessToken = response.accessToken
+                val refreshToken = response.refreshToken
+
+                if (user != null && accessToken != null && refreshToken != null) {
+                    tokenStorage.saveTokens(accessToken, refreshToken)
+                    Result.success(user)
+                } else {
+                    Result.failure(Exception("verification_success_no_tokens"))
+                }
             }
         )
     }
@@ -77,7 +86,7 @@ class AuthRepository(
                     tokenStorage.saveTokens(accessToken, refreshToken)
                     Result.success(user)
                 } else {
-                    Result.failure(Exception("Incomplete response from server"))
+                    Result.failure(Exception("server_failure"))
                 }
             }
         )
@@ -119,16 +128,14 @@ class AuthRepository(
     suspend fun logout(): Result<Unit> {
         val accessToken = tokenStorage.getAccessToken()
         
-        // Best effort backend logout
         if (accessToken != null) {
             try {
                 apiService.logout("Bearer $accessToken")
             } catch (e: Exception) {
-                // Ignore backend failure for logout
+                // Ignore
             }
         }
 
-        // Always clear local tokens
         tokenStorage.clearTokens()
         return Result.success(Unit)
     }
@@ -136,16 +143,14 @@ class AuthRepository(
     suspend fun logoutAll(): Result<Unit> {
         val accessToken = tokenStorage.getAccessToken()
 
-        // Best effort backend logout-all
         if (accessToken != null) {
             try {
                 apiService.logoutAll("Bearer $accessToken")
             } catch (e: Exception) {
-                // Ignore backend failure
+                // Ignore
             }
         }
 
-        // Always clear local tokens
         tokenStorage.clearTokens()
         return Result.success(Unit)
     }
@@ -159,16 +164,33 @@ class AuthRepository(
     ): Result<R> {
         return try {
             val response = call()
-            val body = response.body()
-
-            if (response.isSuccessful && body != null) {
-                onSuccess(body)
+            
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) {
+                    onSuccess(body)
+                } else {
+                    Result.failure(Exception("server_failure"))
+                }
             } else {
-                val errorMessage = response.errorBody()?.string() ?: "Unknown error"
-                Result.failure(Exception("API Error ${response.code()}: $errorMessage"))
+                val errorCode = response.code()
+                val errorBodyString = response.errorBody()?.string() ?: ""
+                
+                val mappedMessage = when {
+                    errorBodyString.contains("verify your email", ignoreCase = true) -> "unverified_account"
+                    errorBodyString.contains("already exists", ignoreCase = true) -> "email_already_exists"
+                    errorBodyString.contains("invalid", ignoreCase = true) && errorBodyString.contains("token", ignoreCase = true) -> "invalid_token"
+                    errorBodyString.contains("expired", ignoreCase = true) -> "expired_token"
+                    errorBodyString.contains("already been used", ignoreCase = true) -> "token_already_used"
+                    errorCode == 401 -> "invalid_credentials"
+                    errorCode == 403 -> "forbidden"
+                    errorCode >= 500 -> "server_failure"
+                    else -> "server_failure"
+                }
+                Result.failure(Exception(mappedMessage))
             }
         } catch (e: IOException) {
-            Result.failure(Exception("Network error: Check your connection"))
+            Result.failure(Exception("network_failure"))
         } catch (e: Exception) {
             Result.failure(e)
         }

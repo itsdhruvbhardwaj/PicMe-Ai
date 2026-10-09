@@ -5,5 +5,6 @@ data class User(
     val name: String,
     val email: String,
     val emailVerified: Boolean,
-    val profileImage: String?
+    val isActive: Boolean = true,
+    val profileImage: String? = null
 )

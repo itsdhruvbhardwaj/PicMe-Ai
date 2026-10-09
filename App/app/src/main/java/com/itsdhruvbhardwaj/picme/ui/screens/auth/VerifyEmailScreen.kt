@@ -7,6 +7,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -15,8 +16,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itsdhruvbhardwaj.picme.ui.auth.AuthState
-import com.itsdhruvbhardwaj.picme.ui.components.PicMeButton
-import com.itsdhruvbhardwaj.picme.ui.components.PicMeTextField
 import com.itsdhruvbhardwaj.picme.ui.theme.Primary
 import com.itsdhruvbhardwaj.picme.ui.theme.TextSecondary
 
@@ -30,14 +29,15 @@ fun VerifyEmailScreen(
     onResendClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
-    var tokenState by remember { mutableStateOf(token ?: "") }
-
     val isLoading = authState is AuthState.Authenticating
     val errorMessage = (authState as? AuthState.Error)?.message
+    
+    var verificationTriggered by rememberSaveable { mutableStateOf(false) }
 
     // Auto-trigger verification if token is provided via deep link
     LaunchedEffect(token) {
-        if (!token.isNullOrBlank()) {
+        if (!token.isNullOrBlank() && !verificationTriggered) {
+            verificationTriggered = true
             onVerifyClick(token)
         }
     }
@@ -65,19 +65,19 @@ fun VerifyEmailScreen(
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(40.dp))
             
             Icon(
                 imageVector = Icons.Default.MailOutline,
                 contentDescription = null,
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier.size(100.dp),
                 tint = Primary
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "Verify Your Email",
+                text = "Check your email",
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 32.sp
@@ -86,61 +86,51 @@ fun VerifyEmailScreen(
                 textAlign = TextAlign.Center
             )
             
-            if (email != null) {
-                Text(
-                    text = "We've sent a verification token to\n$email",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = TextSecondary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp, bottom = 32.dp),
-                    textAlign = TextAlign.Center
-                )
-            } else {
-                Text(
-                    text = "Please enter the verification token sent to your email",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = TextSecondary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp, bottom = 32.dp),
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            PicMeTextField(
-                value = tokenState,
-                onValueChange = { tokenState = it },
-                label = "Verification Token",
-                leadingIcon = Icons.Default.MailOutline,
-                enabled = !isLoading
+            Text(
+                text = if (email != null) 
+                    "We've sent a verification link to\n$email. Open the email and tap the verification link to verify your account."
+                else "We've sent a verification link to your email address. Open the email and tap the verification link to verify your account.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = TextSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                textAlign = TextAlign.Center
             )
+
+            Text(
+                text = "Can't find the email? Check your Spam or Junk folder.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp),
+                textAlign = TextAlign.Center
+            )
+
+            if (isLoading) {
+                Spacer(modifier = Modifier.height(48.dp))
+                CircularProgressIndicator(color = Primary)
+            }
 
             if (errorMessage != null) {
                 Text(
                     text = errorMessage,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 16.dp),
+                    modifier = Modifier.padding(top = 24.dp),
                     textAlign = TextAlign.Center
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            PicMeButton(
-                text = "Verify",
-                onClick = { onVerifyClick(tokenState) },
-                enabled = tokenState.isNotBlank(),
-                isLoading = isLoading
-            )
+            Spacer(modifier = Modifier.weight(1f))
 
             if (email != null) {
-                Spacer(modifier = Modifier.height(24.dp))
-
                 Row(
                     horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 32.dp)
                 ) {
                     Text(
                         text = "Didn't receive the email? ",

@@ -103,6 +103,8 @@ fun NavGraph(
                         }
                     })
                     
+                    // If splash animation finished but session check is still pending, 
+                    // this effect will trigger navigation as soon as checking finishes.
                     LaunchedEffect(authState) {
                         if (authState !is AuthState.CheckingSession && currentRoute == Screen.Splash.route) {
                             val isOnboardingCompleted = prefs.getBoolean("onboarding_completed", false)
@@ -136,13 +138,22 @@ fun NavGraph(
                 }
 
                 composable(Screen.Login.route) {
+                    LaunchedEffect(Unit) {
+                        authViewModel.resetAuthState()
+                    }
+
                     LoginScreen(
                         authState = authState,
                         onLoginClick = { email, password -> 
                             authViewModel.login(email, password)
                         },
+                        onResendVerificationClick = { email ->
+                            authViewModel.resendVerification(email)
+                        },
                         onGoogleClick = { /* Handle Google Login */ },
-                        onSignUpClick = { navController.navigate(Screen.Signup.route) },
+                        onSignUpClick = { 
+                            navController.navigate(Screen.Signup.route) 
+                        },
                         onForgotPasswordClick = { /* Handle Forgot Password */ }
                     )
                     
@@ -156,13 +167,19 @@ fun NavGraph(
                 }
 
                 composable(Screen.Signup.route) {
+                    LaunchedEffect(Unit) {
+                        authViewModel.resetAuthState()
+                    }
+
                     SignupScreen(
                         authState = authState,
                         onSignupClick = { name, email, password -> 
                             authViewModel.signup(name, email, password)
                         },
                         onGoogleClick = { /* Handle Google Login */ },
-                        onSignInClick = { navController.navigate(Screen.Login.route) },
+                        onSignInClick = { 
+                            navController.navigate(Screen.Login.route) 
+                        },
                         onBackClick = { navController.popBackStack() }
                     )
                     
@@ -210,7 +227,11 @@ fun NavGraph(
                     )
                     
                     LaunchedEffect(authState) {
-                        if (authState is AuthState.VerificationSuccess) {
+                        if (authState is AuthState.Authenticated) {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.VerifyEmail.route) { inclusive = true }
+                            }
+                        } else if (authState is AuthState.VerificationSuccess) {
                             authViewModel.resetAuthState()
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(Screen.VerifyEmail.route) { inclusive = true }

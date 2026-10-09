@@ -1,10 +1,15 @@
 package com.itsdhruvbhardwaj.picme.ui.screens.auth
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -28,6 +33,7 @@ import com.itsdhruvbhardwaj.picme.ui.components.PicMeSocialButton
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeTextField
 import com.itsdhruvbhardwaj.picme.ui.theme.Primary
 import com.itsdhruvbhardwaj.picme.ui.theme.TextSecondary
+import com.itsdhruvbhardwaj.picme.utils.ValidationUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,10 +47,29 @@ fun SignupScreen(
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
 
     val isLoading = authState is AuthState.Authenticating
-    val errorMessage = (authState as? AuthState.Error)?.message
+    val backendErrorMessage = (authState as? AuthState.Error)?.message
+    
+    // Validation States
+    val isEmailValid = remember(email) { ValidationUtils.isValidEmail(email) }
+    val passwordRequirements = remember(password) { ValidationUtils.checkPasswordRequirements(password) }
+    val isPasswordStrong = remember(password) { ValidationUtils.isStrongPassword(password) }
+    val passwordsMatch = remember(password, confirmPassword) { password == confirmPassword }
+    
+    val isFormValid by remember(name, email, password, confirmPassword, isLoading) {
+        derivedStateOf {
+            name.length >= 2 && 
+            isEmailValid && 
+            isPasswordStrong && 
+            confirmPassword.isNotEmpty() && 
+            passwordsMatch && 
+            !isLoading
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -66,7 +91,8 @@ fun SignupScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -100,11 +126,20 @@ fun SignupScreen(
             PicMeTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = "Email",
+                label = "Email Address",
                 leadingIcon = Icons.Default.Email,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 enabled = !isLoading
             )
+            
+            if (email.isNotEmpty() && !isEmailValid) {
+                Text(
+                    text = "Enter a valid email address.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 4.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -123,10 +158,48 @@ fun SignupScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 enabled = !isLoading
             )
+            
+            // Password Requirements Checklist
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                RequirementItem("At least 8 characters", passwordRequirements.hasMinLength)
+                RequirementItem("At least one uppercase letter", passwordRequirements.hasUppercase)
+                RequirementItem("At least one lowercase letter", passwordRequirements.hasLowercase)
+                RequirementItem("At least one number", passwordRequirements.hasDigit)
+            }
 
-            if (errorMessage != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            PicMeTextField(
+                value = confirmPassword,
+                onValueChange = { confirmPassword = it },
+                label = "Confirm Password",
+                leadingIcon = Icons.Default.Lock,
+                visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    val image = if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                    IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }, enabled = !isLoading) {
+                        Icon(imageVector = image, contentDescription = null, tint = TextSecondary)
+                    }
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                enabled = !isLoading
+            )
+            
+            if (confirmPassword.isNotEmpty() && !passwordsMatch) {
                 Text(
-                    text = errorMessage,
+                    text = "Passwords do not match.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 4.dp)
+                )
+            }
+
+            if (backendErrorMessage != null && isFormValid) {
+                Text(
+                    text = backendErrorMessage,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 16.dp),
@@ -138,9 +211,13 @@ fun SignupScreen(
 
             PicMeButton(
                 text = "Sign Up",
-                onClick = { onSignupClick(name, email, password) },
+                onClick = { 
+                    if (isFormValid) {
+                        onSignupClick(name, email, password)
+                    }
+                },
                 isLoading = isLoading,
-                enabled = name.isNotBlank() && email.isNotBlank() && password.isNotBlank()
+                enabled = isFormValid
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -174,7 +251,7 @@ fun SignupScreen(
                 horizontalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 24.dp)
+                    .padding(vertical = 24.dp)
             ) {
                 Text(
                     text = "Already have an account? ",
@@ -191,5 +268,27 @@ fun SignupScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun RequirementItem(text: String, isMet: Boolean) {
+    val color by animateColorAsState(if (isMet) Primary else TextSecondary.copy(alpha = 0.5f), label = "color")
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Icon(
+            imageVector = if (isMet) Icons.Default.Check else Icons.Default.Close,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = color
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = color
+        )
     }
 }

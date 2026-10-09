@@ -32,6 +32,7 @@ import com.itsdhruvbhardwaj.picme.ui.theme.TextSecondary
 fun LoginScreen(
     authState: AuthState,
     onLoginClick: (String, String) -> Unit,
+    onResendVerificationClick: (String) -> Unit,
     onGoogleClick: () -> Unit,
     onSignUpClick: () -> Unit,
     onForgotPasswordClick: () -> Unit
@@ -42,6 +43,7 @@ fun LoginScreen(
 
     val isLoading = authState is AuthState.Authenticating
     val errorMessage = (authState as? AuthState.Error)?.message
+    val isUnverified = errorMessage?.contains("hasn't been verified yet", ignoreCase = true) == true
 
     Column(
         modifier = Modifier
@@ -136,6 +138,18 @@ fun LoginScreen(
                 modifier = Modifier.padding(top = 16.dp),
                 textAlign = TextAlign.Center
             )
+            
+            if (isUnverified) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Resend Verification Email",
+                    color = Primary,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.clickable(enabled = !isLoading) { 
+                        onResendVerificationClick(email)
+                    }
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
