@@ -137,40 +137,119 @@ describe("email verification", () => {
     googleAuthMocks.sendEmail.mockResolvedValue({ data: { id: "email-123" }, error: null });
   });
 
-  it("verifies a valid token and marks the user as verified", async () => {
+  it("verifies a valid token, creates a session, and returns the authenticated user", async () => {
     const token = "raw-token-123";
-    const hashed = "hashed-token";
-
-    userModel.findById.mockImplementation(() => ({
-      select: () => ({ lean: async () => ({ _id: "user-456", email: "verified@example.com", emailVerified: false, isActive: true, name: "User" }) }),
-    }));
-
-    tokenModel.findOne.mockReturnValue({
-      lean: async () => ({
-        _id: "token-456",
-        userId: "user-456",
-        tokenHash: hashed,
-        expiresAt: new Date(Date.now() + 60_000),
-        usedAt: null,
-      }),
-    });
-    userModel.findById.mockResolvedValue({
+    const user = {
       _id: "user-456",
       email: "verified@example.com",
       emailVerified: false,
       isActive: true,
       name: "User",
+      profileImage: null,
+      passwordHash: "must-not-be-returned",
+      googleId: "must-not-be-returned",
+      credits: 500,
+    };
+
+    tokenModel.findOne.mockReturnValue({
+      lean: async () => ({
+        _id: "token-456",
+        userId: "user-456",
+        tokenHash: "stored-token-hash",
+        expiresAt: new Date(Date.now() + 60_000),
+        usedAt: null,
+      }),
     });
+    userModel.findById.mockResolvedValue(user);
     userModel.updateOne.mockResolvedValue({ ok: true });
-    tokenModel.updateOne.mockResolvedValue({ ok: true, modifiedCount: 1 });
+    tokenModel.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    sessionModel.create.mockResolvedValue({ _id: "session-456" });
 
     const response = await request(app).post("/api/auth/verify-email").send({ token });
 
     expect(response.status).toBe(200);
-    expect(response.body.ok).toBe(true);
+    expect(response.body.user).toEqual({
+      id: "user-456",
+      email: "verified@example.com",
+      name: "User",
+      emailVerified: true,
+      isActive: true,
+      profileImage: null,
+    });
+    expect(response.body.accessToken).toBeTruthy();
+    expect(response.body.refreshToken).toBeTruthy();
+    expect(response.body.user).not.toHaveProperty("passwordHash");
+    expect(response.body.user).not.toHaveProperty("googleId");
+    expect(response.body.user).not.toHaveProperty("credits");
+    expect(sessionModel.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-456",
+        refreshTokenHash: expect.any(String),
+        deviceInfo: expect.any(String),
+      }),
+    );
+    expect(sessionModel.create.mock.calls[0][0].refreshTokenHash).not.toBe(
+      response.body.refreshToken,
+    );
+
+    userModel.findById.mockImplementation(() => ({
+      select: () => ({
+        lean: async () => ({
+          _id: "user-456",
+          email: "verified@example.com",
+          name: "User",
+          emailVerified: true,
+          isActive: true,
+          profileImage: null,
+        }),
+      }),
+    }));
+    sessionModel.findOne.mockReturnValue({
+      lean: async () => ({
+        _id: "session-456",
+        userId: "user-456",
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+    });
+
+    const meResponse = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${response.body.accessToken}`);
+
+    expect(meResponse.status).toBe(200);
+    expect(meResponse.body.user.email).toBe("verified@example.com");
+
+    userModel.findById.mockResolvedValue(user);
+    sessionModel.findOne.mockReturnValue({
+      lean: async () => ({
+        _id: "session-456",
+        userId: "user-456",
+        deviceInfo: "test-device",
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+    });
+    sessionModel.create.mockResolvedValue({ _id: "session-789" });
+    sessionModel.updateOne.mockResolvedValue({ modifiedCount: 1 });
+
+    const refreshResponse = await request(app)
+      .post("/api/auth/refresh")
+      .send({ refreshToken: response.body.refreshToken });
+
+    expect(refreshResponse.status).toBe(200);
+    expect(refreshResponse.body.accessToken).toBeTruthy();
+    expect(refreshResponse.body.refreshToken).toBeTruthy();
+    expect(refreshResponse.body.refreshToken).not.toBe(response.body.refreshToken);
+    expect(sessionModel.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        refreshTokenHash: expect.any(String),
+        revokedAt: null,
+      }),
+    );
   });
 
-  it("rejects expired verification tokens", async () => {
+  it("rejects invalid verification tokens with a client-distinguishable error", async () => {
     tokenModel.findOne.mockReturnValue({
       lean: async () => null,
     });
@@ -178,7 +257,91 @@ describe("email verification", () => {
     const response = await request(app).post("/api/auth/verify-email").send({ token: "expired-token" });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toMatch(/invalid or expired/i);
+    expect(response.body).toMatchObject({
+      ok: false,
+      code: "VERIFICATION_TOKEN_INVALID",
+    });
+    expect(sessionModel.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects expired verification tokens with a client-distinguishable error", async () => {
+    tokenModel.findOne.mockReturnValue({
+      lean: async () => ({
+        _id: "token-expired",
+        userId: "user-expired",
+        expiresAt: new Date(Date.now() - 60_000),
+        usedAt: null,
+      }),
+    });
+
+    const response = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: "expired-token" });
+
+    expect(response.status).toBe(410);
+    expect(response.body).toMatchObject({
+      ok: false,
+      code: "VERIFICATION_TOKEN_EXPIRED",
+    });
+    expect(sessionModel.create).not.toHaveBeenCalled();
+  });
+
+  it("does not create duplicate sessions when a verification token is consumed concurrently", async () => {
+    const user = {
+      _id: "user-once",
+      email: "once@example.com",
+      emailVerified: false,
+      isActive: true,
+      name: "Once User",
+    };
+    const unusedToken = {
+      _id: "token-once",
+      userId: "user-once",
+      expiresAt: new Date(Date.now() + 60_000),
+      usedAt: null,
+    };
+
+    tokenModel.findOne.mockReturnValue({
+      lean: async () => unusedToken,
+    });
+    tokenModel.updateOne
+      .mockResolvedValueOnce({ modifiedCount: 1 })
+      .mockResolvedValueOnce({ modifiedCount: 0 });
+    userModel.findById.mockResolvedValue(user);
+    userModel.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    sessionModel.create.mockResolvedValue({ _id: "session-once" });
+
+    const firstResponse = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: "single-use-token" });
+    const duplicateResponse = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: "single-use-token" });
+
+    expect(firstResponse.status).toBe(200);
+    expect(duplicateResponse.status).toBe(410);
+    expect(duplicateResponse.body.code).toBe("VERIFICATION_TOKEN_USED");
+    expect(sessionModel.create).toHaveBeenCalledTimes(1);
+    expect(userModel.updateOne).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a generic error when verification fails unexpectedly", async () => {
+    tokenModel.findOne.mockReturnValue({
+      lean: async () => {
+        throw new Error("database internals must not be exposed");
+      },
+    });
+
+    const response = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: "valid-looking-token" });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({
+      ok: false,
+      error: "Unable to verify email. Please try again later.",
+      code: "VERIFICATION_FAILED",
+    });
   });
 
   it("resends verification email through Resend", async () => {
@@ -227,6 +390,9 @@ describe("email verification", () => {
 
     expect(response.status).toBe(200);
     expect(response.text).toBe("Email verified successfully. You can now log in.");
+    expect(response.headers["content-type"]).toMatch(/^text\/plain\b/);
+    expect(response.text).not.toContain("accessToken");
+    expect(response.text).not.toContain("refreshToken");
     expect(userModel.updateOne).toHaveBeenCalledWith(
       { _id: "user-get-valid" },
       { $set: { emailVerified: true } },

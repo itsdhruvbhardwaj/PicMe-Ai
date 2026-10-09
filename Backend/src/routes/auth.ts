@@ -115,7 +115,7 @@ async function verifyGoogleIdentity(idToken: string): Promise<{
 }
 
 type VerificationResult =
-  | { ok: true }
+  | { ok: true; user: ReturnType<typeof sanitizeUser> }
   | { ok: false; reason: "invalid" | "expired" | "used" };
 
 async function verifyEmailToken(rawToken: string): Promise<VerificationResult> {
@@ -155,7 +155,8 @@ async function verifyEmailToken(rawToken: string): Promise<VerificationResult> {
   }
 
   await User.updateOne({ _id: user._id }, { $set: { emailVerified: true } });
-  return { ok: true };
+  user.emailVerified = true;
+  return { ok: true, user: sanitizeUser(user) };
 }
 
 async function issueVerificationTokenForUser(userId: string): Promise<{ rawToken: string; hash: string; expiresAt: Date }> {
@@ -375,19 +376,72 @@ router.post("/verify-email", authRateLimiter, async (req: Request, res: Response
   const rawToken = getRequestBodyValue(req, "token");
 
   if (!rawToken) {
-    return res.status(400).json({ ok: false, error: "Verification token is required." });
+    return res.status(400).json({
+      ok: false,
+      error: "Verification token is required.",
+      code: "VERIFICATION_TOKEN_REQUIRED",
+    });
   }
 
   try {
     const result = await verifyEmailToken(rawToken);
     if (!result.ok) {
-      return res.status(400).json({ ok: false, error: "The verification link is invalid or expired." });
+      const errors = {
+        invalid: {
+          status: 400,
+          error: "The verification link is invalid.",
+          code: "VERIFICATION_TOKEN_INVALID",
+        },
+        expired: {
+          status: 410,
+          error: "The verification link has expired.",
+          code: "VERIFICATION_TOKEN_EXPIRED",
+        },
+        used: {
+          status: 410,
+          error: "The verification link has already been used.",
+          code: "VERIFICATION_TOKEN_USED",
+        },
+      } as const;
+      const failure = errors[result.reason];
+      return res.status(failure.status).json({
+        ok: false,
+        error: failure.error,
+        code: failure.code,
+      });
     }
 
-    return res.json({ ok: true, message: "Email verified successfully." });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to verify email.";
-    return res.status(500).json({ ok: false, error: message });
+    if (!result.user.isActive) {
+      return res.status(403).json({
+        ok: false,
+        error: "Account is inactive.",
+        code: "ACCOUNT_INACTIVE",
+      });
+    }
+
+    const refreshToken = createRefreshToken();
+    const refreshTokenHash = hashRefreshToken(refreshToken);
+    const session = await Session.create({
+      userId: result.user.id,
+      refreshTokenHash,
+      deviceInfo: req.headers["user-agent"] ?? "",
+      expiresAt: getRefreshSessionExpiryDate(),
+      lastUsedAt: new Date(),
+    });
+    const accessToken = createAccessToken(result.user.id, String(session._id));
+
+    return res.json({
+      ok: true,
+      accessToken,
+      refreshToken,
+      user: result.user,
+    });
+  } catch (_error) {
+    return res.status(500).json({
+      ok: false,
+      error: "Unable to verify email. Please try again later.",
+      code: "VERIFICATION_FAILED",
+    });
   }
 });
 
