@@ -34,13 +34,18 @@ async function sendEmail(message: EmailMessage, purpose: string): Promise<boolea
   }
 }
 
+function buildAuthUrl(path: "verify-email" | "reset-password", rawToken: string): string {
+  const baseUrl = env.appBaseUrl.replace(/\/+$/, "");
+  return `${baseUrl}/api/auth/${path}?token=${encodeURIComponent(rawToken)}`;
+}
+
 export async function sendVerificationEmail(input: {
   email: string;
   name: string;
   rawToken: string;
 }): Promise<boolean> {
   const { email, name, rawToken } = input;
-  const verificationUrl = `${env.appBaseUrl.replace(/\/$/, "")}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}`;
+  const verificationUrl = buildAuthUrl("verify-email", rawToken);
 
   return sendEmail(
     {
@@ -63,7 +68,7 @@ export async function sendPasswordResetEmail(input: {
   rawToken: string;
 }): Promise<boolean> {
   const { email, rawToken } = input;
-  const resetUrl = `${env.appBaseUrl.replace(/\/$/, "")}/api/auth/reset-password?token=${encodeURIComponent(rawToken)}`;
+  const resetUrl = buildAuthUrl("reset-password", rawToken);
 
   return sendEmail(
     {

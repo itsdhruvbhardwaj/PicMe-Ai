@@ -10,7 +10,7 @@ vi.mock("resend", () => ({
   })),
 }));
 
-import { sendVerificationEmail } from "./services/emailService.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "./services/emailService.js";
 
 const resendApiKey = "test-resend-api-key";
 const verificationToken = "secret-verification-token";
@@ -84,5 +84,39 @@ describe("Resend email delivery", () => {
     expect(loggedOutput).not.toContain(resendApiKey);
     expect(loggedOutput).not.toContain(verificationToken);
     expect(loggedOutput).not.toContain(error.message);
+  });
+});
+
+describe("authentication email URLs", () => {
+  it("uses APP_BASE_URL for verification and reset links without duplicate slashes", async () => {
+    process.env.APP_BASE_URL = "https://backend.example.test///";
+    resendMocks.send.mockResolvedValue({ data: { id: "email-id" }, error: null });
+
+    await sendVerificationEmail({
+      email: "user@example.com",
+      name: "User",
+      rawToken: verificationToken,
+    });
+    await sendPasswordResetEmail({
+      email: "user@example.com",
+      rawToken: verificationToken,
+    });
+
+    expect(resendMocks.send).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        text: expect.stringContaining(
+          `https://backend.example.test/api/auth/verify-email?token=${verificationToken}`,
+        ),
+      }),
+    );
+    expect(resendMocks.send).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        text: expect.stringContaining(
+          `https://backend.example.test/api/auth/reset-password?token=${verificationToken}`,
+        ),
+      }),
+    );
   });
 });
