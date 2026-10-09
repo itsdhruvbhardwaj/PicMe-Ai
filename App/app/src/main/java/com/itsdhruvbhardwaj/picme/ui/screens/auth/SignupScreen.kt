@@ -19,8 +19,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itsdhruvbhardwaj.picme.ui.auth.AuthState
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeButton
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeSocialButton
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeTextField
@@ -30,6 +32,7 @@ import com.itsdhruvbhardwaj.picme.ui.theme.TextSecondary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignupScreen(
+    authState: AuthState,
     onSignupClick: (String, String, String) -> Unit,
     onGoogleClick: () -> Unit,
     onSignInClick: () -> Unit,
@@ -40,12 +43,15 @@ fun SignupScreen(
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
+    val isLoading = authState is AuthState.Authenticating
+    val errorMessage = (authState as? AuthState.Error)?.message
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {},
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
+                    IconButton(onClick = onBackClick, enabled = !isLoading) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
@@ -85,7 +91,8 @@ fun SignupScreen(
                 value = name,
                 onValueChange = { name = it },
                 label = "Full Name",
-                leadingIcon = Icons.Default.Person
+                leadingIcon = Icons.Default.Person,
+                enabled = !isLoading
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -95,7 +102,8 @@ fun SignupScreen(
                 onValueChange = { email = it },
                 label = "Email",
                 leadingIcon = Icons.Default.Email,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                enabled = !isLoading
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -108,18 +116,31 @@ fun SignupScreen(
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !isLoading) {
                         Icon(imageVector = image, contentDescription = null, tint = TextSecondary)
                     }
                 },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                enabled = !isLoading
             )
+
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 16.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 
             PicMeButton(
                 text = "Sign Up",
-                onClick = { onSignupClick(name, email, password) }
+                onClick = { onSignupClick(name, email, password) },
+                isLoading = isLoading,
+                enabled = name.isNotBlank() && email.isNotBlank() && password.isNotBlank()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -143,7 +164,8 @@ fun SignupScreen(
             PicMeSocialButton(
                 text = "Continue with Google",
                 iconRes = null,
-                onClick = onGoogleClick
+                onClick = onGoogleClick,
+                enabled = !isLoading
             )
 
             Spacer(modifier = Modifier.weight(1f))
@@ -165,7 +187,7 @@ fun SignupScreen(
                         color = Primary,
                         fontWeight = FontWeight.Bold
                     ),
-                    modifier = Modifier.clickable(onClick = onSignInClick)
+                    modifier = Modifier.clickable(enabled = !isLoading, onClick = onSignInClick)
                 )
             }
         }

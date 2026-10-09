@@ -33,6 +33,38 @@ class AuthRepository(
         )
     }
 
+    suspend fun register(name: String, email: String, password: String): Result<User> {
+        return safeApiCall(
+            call = { apiService.register(RegisterRequest(name, email, password)) },
+            onSuccess = { response ->
+                val user = response.user
+                if (user != null) {
+                    Result.success(user)
+                } else {
+                    Result.failure(Exception(response.message ?: "Registration failed"))
+                }
+            }
+        )
+    }
+
+    suspend fun verifyEmail(token: String): Result<String> {
+        return safeApiCall(
+            call = { apiService.verifyEmail(VerifyEmailRequest(token)) },
+            onSuccess = { response ->
+                Result.success(response.message)
+            }
+        )
+    }
+
+    suspend fun resendVerification(email: String): Result<String> {
+        return safeApiCall(
+            call = { apiService.resendVerification(ResendVerificationRequest(email)) },
+            onSuccess = { response ->
+                Result.success(response.message)
+            }
+        )
+    }
+
     suspend fun googleAuth(idToken: String): Result<User> {
         return safeApiCall(
             call = { apiService.googleAuth(GoogleAuthRequest(idToken)) },

@@ -74,6 +74,67 @@ class AuthViewModel(
     }
 
     /**
+     * Performs standard user registration.
+     */
+    fun signup(name: String, email: String, password: String) {
+        viewModelScope.launch {
+            _authState.value = AuthState.Authenticating
+            val result = authRepository.register(name, email, password)
+            result.fold(
+                onSuccess = {
+                    // After registration, the backend returns the user but they are not verified.
+                    _authState.value = AuthState.VerifyEmailRequired(email)
+                },
+                onFailure = { error ->
+                    _authState.value = AuthState.Error(error.message ?: "Registration failed")
+                }
+            )
+        }
+    }
+
+    /**
+     * Performs email verification with the provided token.
+     */
+    fun verifyEmail(token: String) {
+        viewModelScope.launch {
+            _authState.value = AuthState.Authenticating
+            val result = authRepository.verifyEmail(token)
+            result.fold(
+                onSuccess = { message ->
+                    _authState.value = AuthState.VerificationSuccess(message ?: "Email verified successfully")
+                },
+                onFailure = { error ->
+                    _authState.value = AuthState.Error(error.message ?: "Verification failed")
+                }
+            )
+        }
+    }
+
+    /**
+     * Resends the verification email.
+     */
+    fun resendVerification(email: String) {
+        viewModelScope.launch {
+            _authState.value = AuthState.Authenticating
+            val result = authRepository.resendVerification(email)
+            result.fold(
+                onSuccess = { message ->
+                    // We stay in VerifyEmailRequired state so user can still enter the token.
+                    // VerificationSuccess is reserved for when the actual token is accepted.
+                    // We might need a separate way to show success for resend, 
+                    // but following existing architecture, we can revert to VerifyEmailRequired 
+                    // or just report success through a toast/event if we had one.
+                    // For now, we revert to VerifyEmailRequired to clear the loading state.
+                    _authState.value = AuthState.VerifyEmailRequired(email)
+                },
+                onFailure = { error ->
+                    _authState.value = AuthState.Error(error.message ?: "Failed to resend verification")
+                }
+            )
+        }
+    }
+
+    /**
      * Performs authentication using a Google ID token.
      */
     fun loginWithGoogle(idToken: String) {
@@ -113,5 +174,13 @@ class AuthViewModel(
                 _authState.value = AuthState.Error(error.message ?: "Authentication failed")
             }
         )
+    }
+
+    /**
+     * Resets the auth state to unauthenticated.
+     * Useful for clearing errors or navigating back to login from verification success.
+     */
+    fun resetAuthState() {
+        _authState.value = AuthState.Unauthenticated
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itsdhruvbhardwaj.picme.ui.auth.AuthState
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeButton
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeLogo
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeSocialButton
@@ -29,6 +30,7 @@ import com.itsdhruvbhardwaj.picme.ui.theme.TextSecondary
 
 @Composable
 fun LoginScreen(
+    authState: AuthState,
     onLoginClick: (String, String) -> Unit,
     onGoogleClick: () -> Unit,
     onSignUpClick: () -> Unit,
@@ -37,6 +39,9 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+
+    val isLoading = authState is AuthState.Authenticating
+    val errorMessage = (authState as? AuthState.Error)?.message
 
     Column(
         modifier = Modifier
@@ -60,7 +65,8 @@ fun LoginScreen(
         PicMeSocialButton(
             text = "Continue with Google",
             iconRes = null, // Will use proper Google icon later
-            onClick = onGoogleClick
+            onClick = onGoogleClick,
+            enabled = !isLoading
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -86,7 +92,8 @@ fun LoginScreen(
             onValueChange = { email = it },
             label = "Email",
             leadingIcon = Icons.Default.Email,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            enabled = !isLoading
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -99,11 +106,12 @@ fun LoginScreen(
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
                 val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !isLoading) {
                     Icon(imageVector = image, contentDescription = null, tint = TextSecondary)
                 }
             },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            enabled = !isLoading
         )
 
         Box(
@@ -116,7 +124,17 @@ fun LoginScreen(
                 text = "Forgot Password?",
                 style = MaterialTheme.typography.labelLarge,
                 color = Primary,
-                modifier = Modifier.clickable(onClick = onForgotPasswordClick)
+                modifier = Modifier.clickable(enabled = !isLoading, onClick = onForgotPasswordClick)
+            )
+        }
+
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 16.dp),
+                textAlign = TextAlign.Center
             )
         }
 
@@ -124,7 +142,9 @@ fun LoginScreen(
 
         PicMeButton(
             text = "Sign In",
-            onClick = { onLoginClick(email, password) }
+            onClick = { onLoginClick(email, password) },
+            isLoading = isLoading,
+            enabled = email.isNotBlank() && password.isNotBlank()
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -144,7 +164,7 @@ fun LoginScreen(
                     color = Primary,
                     fontWeight = FontWeight.Bold
                 ),
-                modifier = Modifier.clickable(onClick = onSignUpClick)
+                modifier = Modifier.clickable(enabled = !isLoading, onClick = onSignUpClick)
             )
         }
     }

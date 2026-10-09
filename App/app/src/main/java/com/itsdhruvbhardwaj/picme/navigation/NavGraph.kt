@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -16,13 +18,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
-import com.itsdhruvbhardwaj.picme.BuildConfig
+import androidx.navigation.navDeepLink
 import com.itsdhruvbhardwaj.picme.data.repository.StyleRepository
 import com.itsdhruvbhardwaj.picme.ui.auth.AuthState
 import com.itsdhruvbhardwaj.picme.ui.auth.AuthViewModel
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeBottomNavigationBar
 import com.itsdhruvbhardwaj.picme.ui.screens.auth.LoginScreen
 import com.itsdhruvbhardwaj.picme.ui.screens.auth.SignupScreen
+import com.itsdhruvbhardwaj.picme.ui.screens.auth.VerifyEmailScreen
 import com.itsdhruvbhardwaj.picme.ui.screens.create.GenerationScreen
 import com.itsdhruvbhardwaj.picme.ui.screens.create.ResultScreen
 import com.itsdhruvbhardwaj.picme.ui.screens.create.SelectPhotosScreen
@@ -58,7 +61,8 @@ fun NavGraph(
         Screen.Profile.route
     )
 
-    val startDestination = if (BuildConfig.DEBUG) Screen.Home.route else Screen.Splash.route
+    // ALWAYS start with Splash Screen to ensure session check is performed
+    val startDestination = Screen.Splash.route
 
     Scaffold(
         bottomBar = {
@@ -83,30 +87,47 @@ fun NavGraph(
             ) {
                 composable(Screen.Splash.route) {
                     SplashScreen(onSplashFinished = {
-                        val isOnboardingCompleted = prefs.getBoolean("onboarding_completed", false)
-                        
-                        val destination = when {
-                            authState is AuthState.Authenticated -> Screen.Home.route
-                            !isOnboardingCompleted -> Screen.Onboarding.route
-                            else -> Screen.Login.route
-                        }
-                        
-                        navController.navigate(destination) {
-                            popUpTo(Screen.Splash.route) { inclusive = true }
+                        // Decide destination only when session check is not in progress
+                        if (authState !is AuthState.CheckingSession) {
+                            val isOnboardingCompleted = prefs.getBoolean("onboarding_completed", false)
+                            
+                            val destination = when {
+                                authState is AuthState.Authenticated -> Screen.Home.route
+                                !isOnboardingCompleted -> Screen.Onboarding.route
+                                else -> Screen.Login.route
+                            }
+                            
+                            navController.navigate(destination) {
+                                popUpTo(Screen.Splash.route) { inclusive = true }
+                            }
                         }
                     })
+                    
+                    LaunchedEffect(authState) {
+                        if (authState !is AuthState.CheckingSession && currentRoute == Screen.Splash.route) {
+                            val isOnboardingCompleted = prefs.getBoolean("onboarding_completed", false)
+                            val destination = when {
+                                authState is AuthState.Authenticated -> Screen.Home.route
+                                !isOnboardingCompleted -> Screen.Onboarding.route
+                                else -> Screen.Login.route
+                            }
+                            navController.navigate(destination) {
+                                popUpTo(Screen.Splash.route) { inclusive = true }
+                            }
+                        }
+                    }
                 }
 
                 composable(Screen.Onboarding.route) {
                     OnboardingScreen(
                         onFinish = {
-                            prefs.edit().putBoolean("onboarding_completed", true).apply()
+                            prefs.edit { putBoolean("onboarding_completed", true) }
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(Screen.Onboarding.route) { inclusive = true }
                             }
                         },
                         onSkip = {
-                            prefs.edit().putBoolean("onboarding_completed", true).apply()
+                            prefs.edit { putBoolean("onboarding_completed", true) }
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(Screen.Onboarding.route) { inclusive = true }
                             }
@@ -116,32 +137,91 @@ fun NavGraph(
 
                 composable(Screen.Login.route) {
                     LoginScreen(
-                        onLoginClick = { _, _ -> 
-                            navController.navigate(Screen.Home.route) {
-                                popUpTo(Screen.Login.route) { inclusive = true }
-                            }
+                        authState = authState,
+                        onLoginClick = { email, password -> 
+                            authViewModel.login(email, password)
                         },
                         onGoogleClick = { /* Handle Google Login */ },
                         onSignUpClick = { navController.navigate(Screen.Signup.route) },
                         onForgotPasswordClick = { /* Handle Forgot Password */ }
                     )
+                    
+                    LaunchedEffect(authState) {
+                        if (authState is AuthState.Authenticated) {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
+                        }
+                    }
                 }
 
                 composable(Screen.Signup.route) {
                     SignupScreen(
-                        onSignupClick = { _, _, _ -> 
-                            navController.navigate(Screen.Home.route) {
-                                popUpTo(Screen.Signup.route) { inclusive = true }
-                            }
+                        authState = authState,
+                        onSignupClick = { name, email, password -> 
+                            authViewModel.signup(name, email, password)
                         },
                         onGoogleClick = { /* Handle Google Login */ },
                         onSignInClick = { navController.navigate(Screen.Login.route) },
                         onBackClick = { navController.popBackStack() }
                     )
+                    
+                    LaunchedEffect(authState) {
+                        if (authState is AuthState.VerifyEmailRequired) {
+                            val email = (authState as AuthState.VerifyEmailRequired).email
+                            navController.navigate(Screen.VerifyEmail.createRoute(email = email)) {
+                                popUpTo(Screen.Signup.route) { inclusive = true }
+                            }
+                        }
+                    }
+                }
+
+                composable(
+                    route = Screen.VerifyEmail.route,
+                    arguments = listOf(
+                        navArgument("email") { 
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                        navArgument("token") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    ),
+                    deepLinks = listOf(
+                        navDeepLink {
+                            uriPattern = "https://picme-ai.onrender.com/api/auth/verify-email?token={token}"
+                        }
+                    )
+                ) { backStackEntry ->
+                    val email = backStackEntry.arguments?.getString("email")
+                    val token = backStackEntry.arguments?.getString("token")
+                    VerifyEmailScreen(
+                        email = email,
+                        token = token,
+                        authState = authState,
+                        onVerifyClick = { verificationToken -> authViewModel.verifyEmail(verificationToken) },
+                        onResendClick = { 
+                            email?.let { authViewModel.resendVerification(it) }
+                        },
+                        onBackClick = { navController.popBackStack() }
+                    )
+                    
+                    LaunchedEffect(authState) {
+                        if (authState is AuthState.VerificationSuccess) {
+                            authViewModel.resetAuthState()
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(Screen.VerifyEmail.route) { inclusive = true }
+                            }
+                        }
+                    }
                 }
 
                 composable(Screen.Home.route) {
                     HomeScreen(
+                        authViewModel = authViewModel,
                         viewModel = homeViewModel,
                         onStyleClick = { styleId ->
                             navController.navigate(Screen.StyleDetails.createRoute(styleId))
@@ -200,7 +280,6 @@ fun NavGraph(
                         onBackClick = { navController.popBackStack() },
                         onTryStyleClick = { id -> 
                             navController.navigate(Screen.SelectPhotos.route) 
-                            // In a real app, we might pass the styleId to SelectPhotos
                         }
                     )
                 }
@@ -230,15 +309,21 @@ fun NavGraph(
 
                 composable(Screen.Profile.route) {
                     ProfileScreen(
+                        authViewModel = authViewModel,
                         onLogoutClick = {
                             authViewModel.logout()
-                            navController.navigate(Screen.Login.route) {
-                                popUpTo(Screen.Home.route) { inclusive = true }
-                            }
                         },
                         onSettingsClick = { /* Handle Settings */ },
                         onNavigateToMyGenerations = { navController.navigate(Screen.History.route) }
                     )
+                    
+                    LaunchedEffect(authState) {
+                        if (authState is AuthState.Unauthenticated) {
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(Screen.Home.route) { inclusive = true }
+                            }
+                        }
+                    }
                 }
                 
                 composable(Screen.Explore.route) { /* Explore Screen placeholder */ }

@@ -1,22 +1,33 @@
 package com.itsdhruvbhardwaj.picme.ui.screens.profile
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.itsdhruvbhardwaj.picme.ui.auth.AuthState
+import com.itsdhruvbhardwaj.picme.ui.auth.AuthViewModel
 import com.itsdhruvbhardwaj.picme.ui.components.CreditBadge
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeButton
 import com.itsdhruvbhardwaj.picme.ui.components.PicMeImagePlaceholder
@@ -26,10 +37,14 @@ import com.itsdhruvbhardwaj.picme.ui.theme.TextSecondary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
+    authViewModel: AuthViewModel,
     onLogoutClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onNavigateToMyGenerations: () -> Unit
 ) {
+    val authState by authViewModel.authState.collectAsState()
+    val user = (authState as? AuthState.Authenticated)?.user
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -60,19 +75,40 @@ fun ProfileScreen(
             Box(
                 modifier = Modifier
                     .size(100.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF3F4F6)),
+                contentAlignment = Alignment.Center
             ) {
-                PicMeImagePlaceholder(modifier = Modifier.fillMaxSize())
+                if (user?.profileImage != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(user.profileImage)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    val initials = user?.name?.take(2)?.uppercase() ?: "U"
+                    Text(
+                        text = initials,
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Gray
+                        )
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Aditi Sharma",
+                text = user?.name ?: "User",
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
             )
             Text(
-                text = "aditi@gmail.com",
+                text = user?.email ?: "",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary
             )
@@ -102,8 +138,9 @@ fun ProfileScreen(
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
+                            // Logic ready for real backend value. Using 0 for now.
                             Text(
-                                text = "120",
+                                text = "0",
                                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                             )
                         }
@@ -115,7 +152,7 @@ fun ProfileScreen(
                     }
                     Button(
                         onClick = { /* Buy Credits */ },
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Primary)
                     ) {
                         Text("Buy More")

@@ -24,7 +24,8 @@ fun PicMeTextField(
     trailingIcon: @Composable (() -> Unit)? = null,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
-    singleLine: Boolean = true
+    singleLine: Boolean = true,
+    enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = value,
@@ -40,11 +41,15 @@ fun PicMeTextField(
         visualTransformation = visualTransformation,
         keyboardOptions = keyboardOptions,
         singleLine = singleLine,
+        enabled = enabled,
         shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = Primary,
             unfocusedBorderColor = Color(0xFFE5E7EB),
-            cursorColor = Primary
+            cursorColor = Primary,
+            disabledBorderColor = Color(0xFFF3F4F6),
+            disabledLabelColor = TextSecondary.copy(alpha = 0.5f),
+            disabledLeadingIconColor = Primary.copy(alpha = 0.5f)
         )
     )
 }

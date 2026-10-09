@@ -20,4 +20,13 @@ sealed class Screen(val route: String) {
     data object StylesGrid : Screen("styles_grid?category={category}") {
         fun createRoute(category: String? = null) = if (category != null) "styles_grid?category=$category" else "styles_grid"
     }
+
+    data object VerifyEmail : Screen("verify_email?email={email}&token={token}") {
+        fun createRoute(email: String? = null, token: String? = null): String {
+            val emailPart = if (email != null) "email=$email" else ""
+            val tokenPart = if (token != null) "token=$token" else ""
+            val query = listOf(emailPart, tokenPart).filter { it.isNotEmpty() }.joinToString("&")
+            return if (query.isNotEmpty()) "verify_email?$query" else "verify_email"
+        }
+    }
 }

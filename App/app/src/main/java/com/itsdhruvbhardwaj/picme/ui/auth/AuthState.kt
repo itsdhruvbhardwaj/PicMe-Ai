@@ -17,7 +17,7 @@ sealed interface AuthState {
     data object Unauthenticated : AuthState
 
     /**
-     * An authentication operation (login/Google) is currently in progress.
+     * An authentication operation (login/Google/Signup/Verify) is currently in progress.
      */
     data object Authenticating : AuthState
 
@@ -26,6 +26,18 @@ sealed interface AuthState {
      * @property user The profile data of the logged-in user.
      */
     data class Authenticated(val user: User) : AuthState
+
+    /**
+     * Registration was successful, but the user needs to verify their email.
+     * @property email The email address that needs verification.
+     */
+    data class VerifyEmailRequired(val email: String) : AuthState
+
+    /**
+     * Email verification was successful. The user should now log in.
+     * @property message Success message from the server.
+     */
+    data class VerificationSuccess(val message: String) : AuthState
 
     /**
      * An authentication operation failed.

@@ -20,8 +20,17 @@
             android:theme="@style/Theme.PicMe">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- App Link for Email Verification -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="picme-ai.onrender.com" />
+                <data android:pathPrefix="/api/auth/verify-email" />
             </intent-filter>
         </activity>
     </application>
